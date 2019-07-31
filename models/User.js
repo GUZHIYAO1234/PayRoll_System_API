@@ -10,7 +10,8 @@ module.exports = db.sequelize.define(
         },
         eNRIC:{
             type:Sequalize.STRING,
-            primaryKey:true
+            primaryKey:true,
+            allowNull: false
         },
         eId:{
             type:Sequalize.STRING,
@@ -42,7 +43,8 @@ module.exports = db.sequelize.define(
         },
         wBalance:{
             type:Sequalize.STRING,
-            allowNull: false
+            allowNull: false,
+            defaultValue:"0"
         },
         ePassword:{
             type:Sequalize.STRING,

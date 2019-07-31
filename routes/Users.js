@@ -3,13 +3,34 @@ const cors = require("cors");
 const users = express.Router();
 const jwt = require('jsonwebtoken');
 const User = require('../models/User.js');
-const Tx = require('../models/Tx.js')
+const Tx = require('../models/Tx.js');
+const Sequelize = require('sequelize');
+const Op = Sequelize.Op;
+
 /*minimum transaction amount
     Notice that this value should be calculated by the business operator to determine
     what is the margin where the cost of initiating transaction exceeds the money earned
     from the transaction itself
 */
 const MIN_TX_AMT = 10;
+
+/** Transaction Default Values: 
+ * 
+ * 
+ * SwiftCode could be retrived from another database in the future
+ * Invoice detail should be added by the payment script or admin manually
+*/
+const txDefaultOriginCurrency = "SGD";
+const txDefaultReceiverCurrency = "SGD";
+const txDefaultStatus = 0;
+const txDefaultOriginAccount = "19388737";
+const txDefaultRecordType = "Payment";
+const txDefaultProductType = "GPP";
+const txDefaultDeliveryMode = "E";
+const txDefaultReceiver = "x";
+const txDefaultCode = "20";
+const txDefaultSwiftCode = "DBSSSGSG";
+const txDefaultInvoiceDetail = "None";
 
 users.use(cors());
 
@@ -20,24 +41,48 @@ process.env.SECRET_KEY = 'secret';
 //register
 users.post('/api/register', (req, res) => {
     const today = new Date();
+    console.log(`NRIC: ${typeof(req.body.eNRIC)}`);
     const userData = {
         companyId: req.body.companyId,
         eNRIC: req.body.eNRIC,
         eId: req.body.eId,
         eName: req.body.eName,
-        eEmail: req.body.email,
+        eEmail: req.body.eEmail,
         rAccount: req.body.rAccount,
         mNumber: req.body.mNumber,
         pScheme: req.body.pScheme,
         mSalary: req.body.mSalary,
-        wBalance: req.body.wBalance,
+        wBalance: "0",
         ePassword: req.body.ePassword,
-        eDateCreated:today
+        eDateCreated: today
     }
+
+    User.findOne({
+        where: {
+            [Op.or]: [{eNRIC:req.body.eNRIC},{rAccount:req.body.rAccount}]
+        }
+    })
+        .then(user => {
+            if (!user){
+                User.create(userData)
+                .then(user=>{
+                    let token = jwt.sign(user.dataValues, process.env.SECRET_KEY, {
+                        expiresIn: 1440
+                    });
+                    res.json({token:token});
+                })
+                .catch(err=>console.log(err))
+            }else{
+                res.status(400).json({msg:"user or account exists"});
+            }
+    }).catch(err=>{
+        console.log(err);
+        res.status(400);
+    });
 });
 
 //Login
-users.post('/login', (req, res) => {
+users.post('/api/login', (req, res) => {
 
     console.log(`Email:${req.body.eEmail} Password:${req.body.ePassword}`);
     User.findOne({
@@ -46,41 +91,43 @@ users.post('/login', (req, res) => {
         }
     })
         .then(user => {
-            if (req.body.ePassword == user.ePassword) {
-                let token = jwt.sign(user.dataValues, process.env.SECRET_KEY, {
-                    expiresIn: 1440
-                });
-                res.status(200).json({ token: token });
+            if (user) {
+                if (req.body.ePassword == user.ePassword) {
+                    let token = jwt.sign(user.dataValues, process.env.SECRET_KEY, {
+                        expiresIn: 1440
+                    });
+                    res.json({user, token: token });
+                }
+                else {
+                    res.status(400).json({msg:"Incorrect Password"});
+                }
+            }else{
+                res.status(400).json({msg:"User does not exist"});
             }
-            else {
-                res.status(201).send('Incorrect Password');
-            }
-        }).catch(err => {
-            res.status(202).send('User does not exist');
-            console.log(`login error:${err}`);
-        });
+        }).catch(err => console.log(`login error:${err}`));
 });
 
 //Add new transaction
-users.post('/addTx', (req, res) => {
+users.post('/api/addTx', (req, res) => {
     const today = new Date();
+
     const txData = {
-        recordType: req.body.recordType,
-        productType: req.body.productType,
-        oAccount: req.body.oAccount,
-        oCurrency: req.body.oCurrency,
-        pCurrency: req.body.pCurrency,
+        recordType: txDefaultRecordType,
+        productType: txDefaultProductType,
+        oAccount: txDefaultOriginAccount,
+        oCurrency: txDefaultOriginCurrency,
+        pCurrency: txDefaultReceiverCurrency,
         pDateTime: today,
-        receiver: req.body.receiver,
+        receiver: txDefaultReceiver,
         rAccount: req.body.rAccount,
-        swiftCode: req.body.swiftCode,
+        swiftCode: txDefaultSwiftCode,
         amount: req.body.amount,
-        txCode: req.body.txCode,
+        txCode: txDefaultCode,
         pPurpose: req.body.pPurpose,
-        deliveryMode: req.body.deliveryMode,
+        deliveryMode: txDefaultDeliveryMode,
         eEmail: req.body.eEmail,
-        invoiceDetail: req.body.invoiceDetail,
-        txStatus: req.body.txStatus
+        invoiceDetail: txDefaultInvoiceDetail,
+        txStatus: txDefaultStatus
     };
 
 
@@ -119,25 +166,28 @@ users.post('/addTx', (req, res) => {
                             // the current wallet Balance should be more than the requested amount
                             if (Number(req.body.amount) <= Number(user.wBalance)) {
                                 // the requested amount should not be less than the assinged minimum amount 
+                                // find the receiver info according to its account number
+                                txData.receiver = user.eName;
+                                txData.eEmail = user.eEmail;
                                 // -- create new transaction
                                 if (Tx.create(txData)) {
                                     // -- update the new balance related to the user's account
                                     if (user.update({ wBalance: user.wBalance - req.body.amount })) {
-                                        res.status(200).send("Transaction and wallet balance updated!");
+                                        res.status(200).json({msg:"Transaction and wallet balance updated!"});
                                     } else {
-                                        res.status(400).send("Oops, Transaction updated, but not balance");
+                                        res.status(400).json({msg:"Oops, Transaction updated, but not balance"});
                                     }
                                 } else {
-                                    res.status(400).send("Oops, Transaction not updated");
+                                    res.status(400).json({msg:"Oops, Transaction not updated"});
                                 }
                             }
                             else {
-                                res.status(400).send("Oops, Not Enough Balance");
+                                res.status(400).json({msg:"Oops, Not Enough Balance"});
                             }
                         }).catch(err => console.log(`login error 3:${err}`));
                 } else {
                     //did not find user account
-                    res.status(400).send('Oops, User does not exist');
+                    res.status(400).json({msg:"Oops, User does not exist"});
                 }
                 // Pending transaction if it is sent twice
                 // Nested calling
@@ -148,7 +198,7 @@ users.post('/addTx', (req, res) => {
 
 
 //GET
-users.get('/tx', (req, resp) =>
+users.get('/api/tx', (req, resp) =>
     Tx.findAll()
         .then(tx => {
             console.log(tx)
@@ -157,7 +207,7 @@ users.get('/tx', (req, resp) =>
         .catch(err => console.log(err))
 );
 
-users.get('/all', (req, resp) =>
+users.get('/api/all', (req, resp) =>
     User.findAll()
         .then(user => {
             console.log(user)
