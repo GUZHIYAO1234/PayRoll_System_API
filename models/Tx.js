@@ -5,7 +5,7 @@ module.exports = db.sequelize.define(
     'transaction_ledger',
     {
         txId:{
-            type:Sequalize.STRING,
+            type:Sequalize.INTEGER,
             primaryKey:true,
             autoIncrement: true
             
@@ -32,7 +32,7 @@ module.exports = db.sequelize.define(
         },
         pDateTime:{
             type:Sequalize.DATE,
-            defaultValue: Sequalize.NOW
+            allowNull: false
         },
         receiver:{
             type:Sequalize.STRING,
