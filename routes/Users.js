@@ -123,19 +123,19 @@ users.post('/api/login', (req, res) => {
                                 }
                             );
                         } else {
-                            console.log("Comp does not exist, you might be hacked!");
-                            res.status(400).send("Dangerous!");
+                            console.log({msg:"Comp does not exist, you might be hacked!"});
+                            res.status(400).send({msg:"Dangerous!No such company!"});
                         }
                     });
 
                 }
                 else {
-                    console.log("Incorrect Password");
-                    res.status(400).send("Incorrect Password");
+                    console.log("Incorrect Password!");
+                    res.status(400).send({msg:"Incorrect Password!"});
                 }
             } else {
                 console.log("User does not exist");
-                res.status(400).json("User does not exist");
+                res.status(400).json({msg:"User does not exist!"});
             }
         }).catch(err => {
             res.status(500).send(err);
@@ -185,7 +185,7 @@ users.post('/api/addTx', (req, res) => {
         console.log(`1.looking for existing receiver account: ${req.body.rAccount}...`);
 
         // find user account
-        console.log("3.looking for the existing user's wallet balance...");
+        console.log("2.looking for the existing user's wallet balance...");
         // find one existing account
         User.findOne({
             where: {
@@ -302,7 +302,7 @@ users.get('/api', (req, resp) => {
                     })
                     .catch(err => {
                         console.log(err);
-                        resp.status(500).send(err);
+                        //resp.status(500).send(err);
                     })
                 ///
             } else {
@@ -467,7 +467,7 @@ users.get('/api/txOf', (req, resp) => {
         })
         .catch(err => {
             console.log(err);
-            resp.status(500).send(err);
+            //resp.status(500).send(err);
         })
 });
 
